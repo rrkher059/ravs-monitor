@@ -1,9 +1,8 @@
-import json
 import time
-from datetime import date
-from pathlib import Path
 
 import requests
+
+from storage import save_snapshot
 
 REPOS = [
     "anthropics/claude-code",
@@ -14,7 +13,6 @@ REPOS = [
 ]
 
 HEADERS = {"User-Agent": "rrkher059"}
-SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 
 
 def fetch_stargazers_count(repo: str) -> int:
@@ -35,13 +33,6 @@ def collect_star_counts(repos: list[str]) -> dict:
         if i < len(repos) - 1:
             time.sleep(1)
     return results
-
-
-def save_snapshot(results: dict) -> Path:
-    SNAPSHOT_DIR.mkdir(exist_ok=True)
-    path = SNAPSHOT_DIR / f"{date.today().isoformat()}.json"
-    path.write_text(json.dumps(results, indent=2))
-    return path
 
 
 if __name__ == "__main__":

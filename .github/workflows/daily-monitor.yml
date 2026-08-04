@@ -39,3 +39,12 @@ jobs:
           git add snapshots/
           git diff --cached --quiet || git commit -m "Add snapshot for $(date -u +%Y-%m-%d)"
           git push
+
+      - name: Alert on workflow failure
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+        run: >
+          python3 diff_snapshots.py --fail-alert
+          "ravs-monitor workflow failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

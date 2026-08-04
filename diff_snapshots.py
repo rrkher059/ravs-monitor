@@ -1,19 +1,14 @@
 import argparse
-import json
 import os
-import re
 import sys
-from datetime import date
-from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
+from storage import find_previous_snapshot, load_snapshot, today_snapshot_path
+
 RESEND_URL = "https://api.resend.com/emails"
 ALERT_FROM = "onboarding@resend.dev"
-
-SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
-DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\.json$")
 
 SAMPLE_DIFF = {
     "changed": [("example/repo", 100, 105)],
@@ -21,20 +16,6 @@ SAMPLE_DIFF = {
     "removed": ["example/removed-repo"],
     "broken": ["example/broken-repo"],
 }
-
-
-def load_snapshot(path: Path) -> dict:
-    return json.loads(path.read_text())
-
-
-def find_previous_snapshot(today_path: Path) -> Path | None:
-    candidates = [
-        p for p in SNAPSHOT_DIR.glob("*.json")
-        if DATE_PATTERN.match(p.name) and p != today_path
-    ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p.stem)
 
 
 def diff_snapshots(previous: dict, current: dict) -> dict:
@@ -125,7 +106,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--test", action="store_true", help="send a sample alert email and exit, ignoring snapshots"
     )
+    parser.add_argument(
+        "--fail-alert",
+        metavar="MESSAGE",
+        help="send a SCRAPER ERROR alert with MESSAGE as the body and exit "
+        "(used by the workflow when an earlier step crashed)",
+    )
     args = parser.parse_args()
+
+    if args.fail_alert:
+        send_alert_email("SCRAPER ERROR", args.fail_alert)
+        print("failure alert sent")
+        sys.exit(0)
 
     if args.test:
         report = format_report(SAMPLE_DIFF)
@@ -134,7 +126,7 @@ if __name__ == "__main__":
         print("test email sent")
         sys.exit(0)
 
-    today_path = SNAPSHOT_DIR / f"{date.today().isoformat()}.json"
+    today_path = today_snapshot_path()
     if not today_path.exists():
         sys.exit(f"no snapshot found for today at {today_path}")
 
