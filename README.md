@@ -85,4 +85,16 @@ python3 github_stars.py      # fetch today's counts, save snapshot
 python3 diff_snapshots.py    # compare to previous snapshot, email if something changed
 ```
 
-Run both on a schedule (cron, launchd, etc.) to get a daily alert whenever star counts move.
+## GitHub Actions
+
+`.github/workflows/daily-monitor.yml` runs both scripts once a day (`0 12 * * *`, i.e. 8am
+Eastern) and can also be triggered manually from the Actions tab (`workflow_dispatch`).
+
+Before it can send alerts, add two repo secrets under Settings → Secrets and variables → Actions:
+
+- `RESEND_API_KEY`
+- `ALERT_TO`
+
+After each run, the workflow commits the new `snapshots/YYYY-MM-DD.json` file back to the repo
+(only if it's actually new — a same-day re-run won't create an empty commit), so the next run has
+a previous snapshot to diff against.
