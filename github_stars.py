@@ -1,3 +1,4 @@
+import sys
 import time
 
 import requests
@@ -37,6 +38,12 @@ def collect_star_counts(repos: list[str]) -> dict:
 
 if __name__ == "__main__":
     results = collect_star_counts(REPOS)
+
+    if all(count is None for count in results.values()):
+        sys.exit(
+            f"ERROR: all {len(results)} repos failed to fetch; not writing a snapshot for today"
+        )
+
     path = save_snapshot(results)
     print(f"saved {path}")
     for repo, count in results.items():

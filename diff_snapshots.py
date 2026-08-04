@@ -96,7 +96,10 @@ def send_alert_email(subject: str, body: str) -> None:
         },
         timeout=10,
     )
-    response.raise_for_status()
+    if not response.ok:
+        raise RuntimeError(
+            f"Resend API error {response.status_code}: {response.text}"
+        )
 
 
 if __name__ == "__main__":

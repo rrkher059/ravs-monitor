@@ -19,7 +19,11 @@ def save_snapshot(results: dict) -> Path:
 
 
 def load_snapshot(path: Path) -> dict:
-    return json.loads(path.read_text())
+    text = path.read_text()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON in snapshot file {path}: {exc}") from exc
 
 
 def find_previous_snapshot(today_path: Path) -> Path | None:
