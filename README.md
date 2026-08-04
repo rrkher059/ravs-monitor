@@ -9,7 +9,8 @@ python3 -m pip install requests python-dotenv
 cp .env.example .env
 ```
 
-Fill in `.env` with real SMTP credentials (see below). `.env` is gitignored and never committed.
+Fill in `.env` with a real Resend API key and recipient address (see below). `.env` is gitignored
+and never committed.
 
 ## Scripts
 
@@ -40,13 +41,22 @@ Compares today's snapshot against the most recent previous one and reports four 
 
 If there's no previous snapshot yet, it prints `baseline saved` and exits.
 
-If any of the four categories has entries, it sends an alert email using the SMTP credentials
-from `.env`. No email is sent on a clean diff.
+If any of the four categories has entries, it sends an alert email via the
+[Resend](https://resend.com) API using the credentials from `.env`. No email is sent on a clean
+diff. The subject line summarizes what happened (e.g. `3 changes`, or `SCRAPER ERROR` if any
+fetch broke), and the body is the same diff report printed to the console.
 
 Run it:
 
 ```
 python3 diff_snapshots.py
+```
+
+Pass `--test` to send a sample alert email immediately, regardless of the actual diff, to confirm
+your Resend credentials work:
+
+```
+python3 diff_snapshots.py --test
 ```
 
 ### `ravs_watch.py`
@@ -60,14 +70,13 @@ snapshot/diff/email flow above.
 
 See `.env.example` for the full list with placeholder values:
 
-| Variable        | Purpose                                    |
-|-----------------|---------------------------------------------|
-| `SMTP_HOST`     | SMTP server hostname                        |
-| `SMTP_PORT`     | SMTP server port (587 for STARTTLS)         |
-| `SMTP_USERNAME` | SMTP login username                         |
-| `SMTP_PASSWORD` | SMTP login password (use an app password for Gmail) |
-| `EMAIL_FROM`    | Sender address                              |
-| `EMAIL_TO`      | Recipient address                           |
+| Variable          | Purpose                                          |
+|-------------------|---------------------------------------------------|
+| `RESEND_API_KEY`  | API key from your Resend account                  |
+| `ALERT_TO`        | Recipient address for alert emails                 |
+
+The sender address is fixed to `onboarding@resend.dev` (Resend's shared sandbox sender) in the
+script itself — no variable needed for it.
 
 ## Typical workflow
 

@@ -1,16 +1,26 @@
+import argparse
 import json
 import os
 import re
-import smtplib
 import sys
 from datetime import date
-from email.message import EmailMessage
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
+
+RESEND_URL = "https://api.resend.com/emails"
+ALERT_FROM = "onboarding@resend.dev"
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\.json$")
+
+SAMPLE_DIFF = {
+    "changed": [("example/repo", 100, 105)],
+    "added": ["example/new-repo"],
+    "removed": ["example/removed-repo"],
+    "broken": ["example/broken-repo"],
+}
 
 
 def load_snapshot(path: Path) -> dict:
@@ -49,6 +59,13 @@ def has_findings(diff: dict) -> bool:
     return any(diff.values())
 
 
+def build_subject(diff: dict) -> str:
+    total_changes = len(diff["changed"]) + len(diff["added"]) + len(diff["removed"])
+    if diff["broken"]:
+        return "SCRAPER ERROR" if total_changes == 0 else f"{total_changes} changes, SCRAPER ERROR"
+    return f"{total_changes} changes"
+
+
 def format_report(diff: dict) -> str:
     lines = []
 
@@ -84,27 +101,38 @@ def print_report(diff: dict) -> None:
 
 
 def send_alert_email(subject: str, body: str) -> None:
-    host = os.environ["SMTP_HOST"]
-    port = int(os.environ["SMTP_PORT"])
-    username = os.environ["SMTP_USERNAME"]
-    password = os.environ["SMTP_PASSWORD"]
-    sender = os.environ["EMAIL_FROM"]
-    recipient = os.environ["EMAIL_TO"]
+    api_key = os.environ["RESEND_API_KEY"]
+    recipient = os.environ["ALERT_TO"]
 
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = sender
-    message["To"] = recipient
-    message.set_content(body)
-
-    with smtplib.SMTP(host, port) as server:
-        server.starttls()
-        server.login(username, password)
-        server.send_message(message)
+    response = requests.post(
+        RESEND_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "from": ALERT_FROM,
+            "to": [recipient],
+            "subject": subject,
+            "text": body,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
 
 
 if __name__ == "__main__":
     load_dotenv()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--test", action="store_true", help="send a sample alert email and exit, ignoring snapshots"
+    )
+    args = parser.parse_args()
+
+    if args.test:
+        report = format_report(SAMPLE_DIFF)
+        subject = f"[TEST] {build_subject(SAMPLE_DIFF)}"
+        send_alert_email(subject, report)
+        print("test email sent")
+        sys.exit(0)
 
     today_path = SNAPSHOT_DIR / f"{date.today().isoformat()}.json"
     if not today_path.exists():
@@ -124,11 +152,6 @@ if __name__ == "__main__":
     print(report)
 
     if has_findings(diff):
-        counts = {category: len(entries) for category, entries in diff.items()}
-        subject = (
-            f"ravs-monitor alert: {counts['changed']} changed, "
-            f"{counts['added']} added, {counts['removed']} removed, "
-            f"{counts['broken']} broken"
-        )
+        subject = build_subject(diff)
         send_alert_email(subject, report)
         print("alert email sent")
