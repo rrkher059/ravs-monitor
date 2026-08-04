@@ -1,8 +1,13 @@
 import json
+import os
 import re
+import smtplib
 import sys
 from datetime import date
+from email.message import EmailMessage
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\.json$")
@@ -40,33 +45,67 @@ def diff_snapshots(previous: dict, current: dict) -> dict:
     return {"changed": changed, "added": added, "removed": removed, "broken": broken}
 
 
-def print_report(diff: dict) -> None:
-    print("Star count changed:")
+def has_findings(diff: dict) -> bool:
+    return any(diff.values())
+
+
+def format_report(diff: dict) -> str:
+    lines = []
+
+    lines.append("Star count changed:")
     for repo, prev_count, cur_count in diff["changed"]:
-        print(f"  {repo}: {prev_count} -> {cur_count}")
+        lines.append(f"  {repo}: {prev_count} -> {cur_count}")
     if not diff["changed"]:
-        print("  (none)")
+        lines.append("  (none)")
 
-    print("New repos added to the list:")
+    lines.append("New repos added to the list:")
     for repo in diff["added"]:
-        print(f"  {repo}")
+        lines.append(f"  {repo}")
     if not diff["added"]:
-        print("  (none)")
+        lines.append("  (none)")
 
-    print("Repos no longer in the list:")
+    lines.append("Repos no longer in the list:")
     for repo in diff["removed"]:
-        print(f"  {repo}")
+        lines.append(f"  {repo}")
     if not diff["removed"]:
-        print("  (none)")
+        lines.append("  (none)")
 
-    print("ERROR - fetch broke (was tracked, now null):")
+    lines.append("ERROR - fetch broke (was tracked, now null):")
     for repo in diff["broken"]:
-        print(f"  {repo}")
+        lines.append(f"  {repo}")
     if not diff["broken"]:
-        print("  (none)")
+        lines.append("  (none)")
+
+    return "\n".join(lines)
+
+
+def print_report(diff: dict) -> None:
+    print(format_report(diff))
+
+
+def send_alert_email(subject: str, body: str) -> None:
+    host = os.environ["SMTP_HOST"]
+    port = int(os.environ["SMTP_PORT"])
+    username = os.environ["SMTP_USERNAME"]
+    password = os.environ["SMTP_PASSWORD"]
+    sender = os.environ["EMAIL_FROM"]
+    recipient = os.environ["EMAIL_TO"]
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content(body)
+
+    with smtplib.SMTP(host, port) as server:
+        server.starttls()
+        server.login(username, password)
+        server.send_message(message)
 
 
 if __name__ == "__main__":
+    load_dotenv()
+
     today_path = SNAPSHOT_DIR / f"{date.today().isoformat()}.json"
     if not today_path.exists():
         sys.exit(f"no snapshot found for today at {today_path}")
@@ -79,4 +118,17 @@ if __name__ == "__main__":
     previous = load_snapshot(previous_path)
     current = load_snapshot(today_path)
     print(f"comparing {previous_path.name} -> {today_path.name}")
-    print_report(diff_snapshots(previous, current))
+
+    diff = diff_snapshots(previous, current)
+    report = format_report(diff)
+    print(report)
+
+    if has_findings(diff):
+        counts = {category: len(entries) for category, entries in diff.items()}
+        subject = (
+            f"ravs-monitor alert: {counts['changed']} changed, "
+            f"{counts['added']} added, {counts['removed']} removed, "
+            f"{counts['broken']} broken"
+        )
+        send_alert_email(subject, report)
+        print("alert email sent")
