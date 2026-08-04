@@ -1,6 +1,8 @@
 import json
+import os
 import re
-from datetime import date
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
@@ -8,13 +10,23 @@ DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\.json$")
 
 
 def today_snapshot_path() -> Path:
-    return SNAPSHOT_DIR / f"{date.today().isoformat()}.json"
+    today = datetime.now(timezone.utc).date().isoformat()
+    return SNAPSHOT_DIR / f"{today}.json"
 
 
 def save_snapshot(results: dict) -> Path:
     SNAPSHOT_DIR.mkdir(exist_ok=True)
     path = today_snapshot_path()
-    path.write_text(json.dumps(results, indent=2))
+
+    fd, tmp_name = tempfile.mkstemp(dir=SNAPSHOT_DIR, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(results, indent=2))
+        os.replace(tmp_name, path)
+    except Exception:
+        os.unlink(tmp_name)
+        raise
+
     return path
 
 

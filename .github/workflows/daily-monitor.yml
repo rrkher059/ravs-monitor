@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: daily-monitor
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -24,6 +28,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch star counts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 github_stars.py
 
       - name: Diff snapshots and alert

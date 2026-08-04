@@ -1,7 +1,9 @@
+import os
 import sys
 import time
 
 import requests
+from dotenv import load_dotenv
 
 from storage import save_snapshot
 
@@ -13,12 +15,18 @@ REPOS = [
     "ollama/ollama",
 ]
 
-HEADERS = {"User-Agent": "rrkher059"}
+
+def build_headers() -> dict:
+    headers = {"User-Agent": "rrkher059"}
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def fetch_stargazers_count(repo: str) -> int:
     url = f"https://api.github.com/repos/{repo}"
-    response = requests.get(url, headers=HEADERS, timeout=10)
+    response = requests.get(url, headers=build_headers(), timeout=10)
     response.raise_for_status()
     return response.json()["stargazers_count"]
 
@@ -28,7 +36,7 @@ def collect_star_counts(repos: list[str]) -> dict:
     for i, repo in enumerate(repos):
         try:
             results[repo] = fetch_stargazers_count(repo)
-        except requests.RequestException as exc:
+        except (requests.RequestException, KeyError) as exc:
             print(f"failed to fetch {repo}: {exc}")
             results[repo] = None
         if i < len(repos) - 1:
@@ -37,6 +45,8 @@ def collect_star_counts(repos: list[str]) -> dict:
 
 
 if __name__ == "__main__":
+    load_dotenv()
+
     results = collect_star_counts(REPOS)
 
     if all(count is None for count in results.values()):

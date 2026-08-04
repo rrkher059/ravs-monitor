@@ -12,7 +12,7 @@ ALERT_FROM = "onboarding@resend.dev"
 
 SAMPLE_DIFF = {
     "changed": [("example/repo", 100, 105)],
-    "added": ["example/new-repo"],
+    "added": [("example/new-repo", 42)],
     "removed": ["example/removed-repo"],
     "broken": ["example/broken-repo"],
 }
@@ -31,7 +31,7 @@ def diff_snapshots(previous: dict, current: dict) -> dict:
         elif cur_count is not None and prev_count != cur_count:
             changed.append((repo, prev_count, cur_count))
 
-    added = [repo for repo in current if repo not in previous]
+    added = [(repo, current[repo]) for repo in current if repo not in previous]
 
     return {"changed": changed, "added": added, "removed": removed, "broken": broken}
 
@@ -42,9 +42,10 @@ def has_findings(diff: dict) -> bool:
 
 def build_subject(diff: dict) -> str:
     total_changes = len(diff["changed"]) + len(diff["added"]) + len(diff["removed"])
+    word = "change" if total_changes == 1 else "changes"
     if diff["broken"]:
-        return "SCRAPER ERROR" if total_changes == 0 else f"{total_changes} changes, SCRAPER ERROR"
-    return f"{total_changes} changes"
+        return "SCRAPER ERROR" if total_changes == 0 else f"{total_changes} {word}, SCRAPER ERROR"
+    return f"{total_changes} {word}"
 
 
 def format_report(diff: dict) -> str:
@@ -57,8 +58,8 @@ def format_report(diff: dict) -> str:
         lines.append("  (none)")
 
     lines.append("New repos added to the list:")
-    for repo in diff["added"]:
-        lines.append(f"  {repo}")
+    for repo, count in diff["added"]:
+        lines.append(f"  {repo}: {count}")
     if not diff["added"]:
         lines.append("  (none)")
 
