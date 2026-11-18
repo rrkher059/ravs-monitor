@@ -1,0 +1,7 @@
+{
+  "anthropics/claude-code": 156151,
+  "anthropics/anthropic-sdk-python": 4086,
+  "openai/openai-python": 32187,
+  "langchain-ai/langchain": 149869,
+  "ollama/ollama": 187571
+}
